@@ -65,7 +65,7 @@ class _MapScreenState extends State<MapScreen> {
   // Islamabad Blue Area center coordinates matching reference UI area
   final LatLng _islamabadCenter = const LatLng(33.7182, 73.0605);
 
-  late MapIncident _activeIncident;
+  MapIncident? _selectedIncident;
   bool _isLoadingSearch = false;
 
   // Filter states
@@ -83,8 +83,8 @@ class _MapScreenState extends State<MapScreen> {
   @override
   void initState() {
     super.initState();
-    // Default featured incident corresponding exactly to "Major Road Sinkhole" in Jinnah Avenue, Islamabad
-    _activeIncident = _getDefaultIncident();
+    // No default incident loaded directly on the map card, start clean!
+    _selectedIncident = null;
     _fetchRealIncidents();
     _fetchRealResources();
     _determinePosition();
@@ -190,9 +190,6 @@ class _MapScreenState extends State<MapScreen> {
 
         setState(() {
           _realIncidents = loaded;
-          if (_realIncidents.isNotEmpty) {
-            _activeIncident = _realIncidents.first;
-          }
         });
       }
     } catch (e) {
@@ -325,7 +322,7 @@ class _MapScreenState extends State<MapScreen> {
         );
 
         // Dynamically update the bottom panel display for this zone
-        _activeIncident = MapIncident(
+        _selectedIncident = MapIncident(
           id: 'KH-SRCH',
           title: 'Active Monitoring Zone',
           urduTitle: 'سرگرم مانیٹرنگ زون',
@@ -453,51 +450,76 @@ class _MapScreenState extends State<MapScreen> {
           ),
           onTap: () {
             setState(() {
-              _activeIncident = inc;
+              _selectedIncident = inc;
             });
           },
         ),
       );
     }
 
-    // Always ensure the currently active selected incident has a marker on the map
-    bool activeAdded = false;
-    for (var m in markers) {
-      if (m.markerId.value.contains(_activeIncident.id)) {
-        activeAdded = true;
-        break;
-      }
-    }
-    if (!activeAdded) {
-      final isCrisis = _activeIncident.severity.contains('P1') || _activeIncident.id == 'KH-201';
+    // If there are no real incidents fetched, add the default incident marker so the map isn't blank
+    if (_realIncidents.isEmpty) {
+      final defInc = _getDefaultIncident();
       markers.add(
         Marker(
-          markerId: MarkerId('active_${_activeIncident.id}'),
-          position: _activeIncident.position,
-          icon: BitmapDescriptor.defaultMarkerWithHue(
-            isCrisis ? BitmapDescriptor.hueRed : BitmapDescriptor.hueOrange,
-          ),
+          markerId: const MarkerId('default_sinkhole'),
+          position: defInc.position,
+          icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
           infoWindow: InfoWindow(
-            title: _activeIncident.title,
-            snippet: '${_activeIncident.severity} (${_activeIncident.location})',
+            title: defInc.title,
+            snippet: '${defInc.severity} (${defInc.location})',
           ),
+          onTap: () {
+            setState(() {
+              _selectedIncident = defInc;
+            });
+          },
         ),
       );
+    }
+
+    // Always ensure the currently selected incident has a marker on the map
+    if (_selectedIncident != null) {
+      bool activeAdded = false;
+      for (var m in markers) {
+        if (m.markerId.value.contains(_selectedIncident!.id)) {
+          activeAdded = true;
+          break;
+        }
+      }
+      if (!activeAdded) {
+        final isCrisis = _selectedIncident!.severity.contains('P1') || _selectedIncident!.id == 'KH-201';
+        markers.add(
+          Marker(
+            markerId: MarkerId('active_${_selectedIncident!.id}'),
+            position: _selectedIncident!.position,
+            icon: BitmapDescriptor.defaultMarkerWithHue(
+              isCrisis ? BitmapDescriptor.hueRed : BitmapDescriptor.hueOrange,
+            ),
+            infoWindow: InfoWindow(
+              title: _selectedIncident!.title,
+              snippet: '${_selectedIncident!.severity} (${_selectedIncident!.location})',
+            ),
+          ),
+        );
+      }
     }
 
     return markers;
   }
 
   Set<Polyline> _createPolylines() {
-    // Enable route simulation if the active incident is a P1 crisis or the default sinkhole
-    final isCrisis = _activeIncident.severity.toLowerCase().contains('p1') || 
-                     _activeIncident.severity.toLowerCase().contains('crisis') ||
-                     _activeIncident.id == 'KH-201';
+    if (_selectedIncident == null) return {};
+
+    // Enable route simulation if the selected incident is a P1 crisis or the default sinkhole
+    final isCrisis = _selectedIncident!.severity.toLowerCase().contains('p1') || 
+                     _selectedIncident!.severity.toLowerCase().contains('crisis') ||
+                     _selectedIncident!.id == 'KH-201';
     
     if (!isCrisis) return {};
     
-    // Dynamic mock route generation relative to the active incident's position
-    final basePos = _activeIncident.position;
+    // Dynamic mock route generation relative to the selected incident's position
+    final basePos = _selectedIncident!.position;
     
     // Closed road (Red Line) - represents the blocked arterial route (narrowed down slightly to fit the street blocks nicely)
     final closedRoadPoints = [
@@ -773,32 +795,34 @@ class _MapScreenState extends State<MapScreen> {
       getDetourText = 'Get Detour';
     }
 
+    final active = _selectedIncident ?? _getDefaultIncident();
+
     // Dynamic translation setup for incident cards
-    String displayTitle = _activeIncident.title;
-    String displayLocation = _activeIncident.location;
-    String displayPlanHeader = _activeIncident.responsePlanHeader;
-    String displaySeverity = _activeIncident.severity;
+    String displayTitle = active.title;
+    String displayLocation = active.location;
+    String displayPlanHeader = active.responsePlanHeader;
+    String displaySeverity = active.severity;
 
     Color severityBg = kEmergencyRed;
-    if (_activeIncident.severity.contains('P3')) {
+    if (active.severity.contains('P3')) {
       severityBg = Colors.orange;
-    } else if (_activeIncident.severity.contains('P5')) {
+    } else if (active.severity.contains('P5')) {
       severityBg = Colors.green;
     }
 
     if (isUrdu) {
-      displayTitle = _activeIncident.urduTitle;
-      displayLocation = _activeIncident.urduLocation;
-      displayPlanHeader = _activeIncident.urduResponsePlanHeader;
-      if (_activeIncident.severity.contains('P1')) {
+      displayTitle = active.urduTitle;
+      displayLocation = active.urduLocation;
+      displayPlanHeader = active.urduResponsePlanHeader;
+      if (active.severity.contains('P1')) {
         displaySeverity = 'P1 ہنگامی صورتحال';
-      } else if (_activeIncident.severity.contains('P3')) {
+      } else if (active.severity.contains('P3')) {
         displaySeverity = 'P3 اہم';
       } else {
         displaySeverity = 'P5 نارمل';
       }
     } else if (currentLang == 'Roman Urdu') {
-      displayTitle = _activeIncident.romanUrduTitle;
+      displayTitle = active.romanUrduTitle;
     }
 
     return Scaffold(
@@ -909,365 +933,380 @@ class _MapScreenState extends State<MapScreen> {
           ),
 
           // ── 3. Bottom Premium Incident Card ──
-          Positioned(
-            bottom: 0,
-            left: 0,
-            right: 0,
-            child: Container(
-              decoration: const BoxDecoration(
-                color: kCardWhite,
-                borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black12,
-                    blurRadius: 15,
-                    spreadRadius: 2,
-                    offset: Offset(0, -3),
-                  ),
-                ],
-              ),
-              padding: const EdgeInsets.fromLTRB(20, 10, 20, 20),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Pull Handle Accent
-                  Center(
-                    child: Container(
-                      width: 36,
-                      height: 4,
-                      decoration: BoxDecoration(
-                        color: Colors.grey.shade300,
-                        borderRadius: BorderRadius.circular(2),
+          if (_selectedIncident != null)
+            Positioned(
+              bottom: 0,
+              left: 0,
+              right: 0,
+              child: Container(
+                decoration: const BoxDecoration(
+                  color: kCardWhite,
+                  borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black12,
+                      blurRadius: 15,
+                      spreadRadius: 2,
+                      offset: Offset(0, -3),
+                    ),
+                  ],
+                ),
+                padding: const EdgeInsets.fromLTRB(20, 10, 20, 20),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Pull Handle Accent + Close Button Row
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const SizedBox(width: 24), // Spacer to balance close button
+                        Container(
+                          width: 36,
+                          height: 4,
+                          decoration: BoxDecoration(
+                            color: Colors.grey.shade300,
+                            borderRadius: BorderRadius.circular(2),
+                          ),
+                        ),
+                        IconButton(
+                          constraints: const BoxConstraints(),
+                          padding: EdgeInsets.zero,
+                          icon: const Icon(Icons.close, color: Colors.grey, size: 20),
+                          onPressed: () {
+                            setState(() {
+                              _selectedIncident = null;
+                            });
+                          },
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 14),
+
+                    // Header Badge + Location + Distance
+                    Row(
+                      children: [
+                        // Badge
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: severityBg,
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Text(
+                            displaySeverity,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        // Location Text
+                        Expanded(
+                          child: Text(
+                            displayLocation,
+                            style: GoogleFonts.nunito(
+                              color: kTextLight,
+                              fontWeight: FontWeight.w600,
+                              fontSize: 13,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        // Distance Info
+                        Row(
+                          children: [
+                            const Icon(
+                              Icons.location_on,
+                              color: kEmergencyRed,
+                              size: 15,
+                            ),
+                            const SizedBox(width: 2),
+                            Text(
+                              active.id == 'KH-201' ? '1.2km' : '0.0km',
+                              style: GoogleFonts.nunito(
+                                color: kEmergencyRed,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 13,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+
+                    // Incident Main Title
+                    Text(
+                      displayTitle,
+                      style: GoogleFonts.nunito(
+                        fontSize: 23,
+                        fontWeight: FontWeight.w800,
+                        color: kTextDark,
                       ),
                     ),
-                  ),
-                  const SizedBox(height: 14),
+                    const SizedBox(height: 16),
 
-                  // Header Badge + Location + Distance
-                  Row(
-                    children: [
-                      // Badge
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 4,
-                        ),
-                        decoration: BoxDecoration(
-                          color: severityBg,
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                        child: Text(
-                          displaySeverity,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 10,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
+                    // Automated Response Plan Card
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF8FAFC),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: const Color(0xFFE2E8F0)),
                       ),
-                      const SizedBox(width: 8),
-                      // Location Text
-                      Expanded(
-                        child: Text(
-                          displayLocation,
-                          style: GoogleFonts.nunito(
-                            color: kTextLight,
-                            fontWeight: FontWeight.w600,
-                            fontSize: 13,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                      // Distance Info
-                      Row(
+                      child: Stack(
                         children: [
-                          const Icon(
-                            Icons.location_on,
-                            color: kEmergencyRed,
-                            size: 15,
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              // Plan Title
+                              Text(
+                                displayPlanHeader,
+                                style: GoogleFonts.nunito(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.bold,
+                                  color: kPrimaryTeal,
+                                  letterSpacing: 0.3,
+                                ),
+                              ),
+                              const SizedBox(height: 12),
+
+                              // Plan Step 1
+                              Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Container(
+                                    width: 22,
+                                    height: 22,
+                                    decoration: const BoxDecoration(
+                                      shape: BoxShape.circle,
+                                      color: kPrimaryTeal,
+                                    ),
+                                    child: const Center(
+                                      child: Text(
+                                        '1',
+                                        style: TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          isUrdu
+                                              ? active.steps[0].urduTitle
+                                              : active.steps[0].title,
+                                          style: GoogleFonts.nunito(
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 13.5,
+                                            color: kTextDark,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 2),
+                                        Text(
+                                          isUrdu
+                                              ? active.steps[0].urduSubtitle
+                                              : active.steps[0].subtitle,
+                                          style: GoogleFonts.nunito(
+                                            fontSize: 11.5,
+                                            color: kTextLight,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 16),
+
+                              // Plan Step 2
+                              Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Container(
+                                    width: 22,
+                                    height: 22,
+                                    decoration: BoxDecoration(
+                                      shape: BoxShape.circle,
+                                      color: Colors.grey.shade300,
+                                    ),
+                                    child: Center(
+                                      child: Text(
+                                        '2',
+                                        style: TextStyle(
+                                          color: Colors.grey.shade700,
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          isUrdu
+                                              ? active.steps[1].urduTitle
+                                              : active.steps[1].title,
+                                          style: GoogleFonts.nunito(
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 13.5,
+                                            color: kTextDark,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 2),
+                                        Text(
+                                          isUrdu
+                                              ? active.steps[1].urduSubtitle
+                                              : active.steps[1].subtitle,
+                                          style: GoogleFonts.nunito(
+                                            fontSize: 11.5,
+                                            color: kTextLight,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
                           ),
-                          const SizedBox(width: 2),
-                          Text(
-                            _activeIncident.id == 'KH-201' ? '1.2km' : '0.0km',
-                            style: GoogleFonts.nunito(
-                              color: kEmergencyRed,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 13,
+
+                          // Sleek Circular Watermark Pattern on the right matching UI
+                          Positioned(
+                            right: -10,
+                            top: -10,
+                            child: Opacity(
+                              opacity: 0.04,
+                              child: Container(
+                                width: 80,
+                                height: 80,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  border: Border.all(
+                                    color: kPrimaryTeal,
+                                    width: 6,
+                                  ),
+                                ),
+                              ),
                             ),
                           ),
                         ],
                       ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-
-                  // Incident Main Title
-                  Text(
-                    displayTitle,
-                    style: GoogleFonts.nunito(
-                      fontSize: 23,
-                      fontWeight: FontWeight.w800,
-                      color: kTextDark,
                     ),
-                  ),
-                  const SizedBox(height: 16),
+                    const SizedBox(height: 20),
 
-                  // Automated Response Plan Card
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFF8FAFC),
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: const Color(0xFFE2E8F0)),
-                    ),
-                    child: Stack(
+                    // Bottom Action Buttons Row
+                    Row(
                       children: [
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            // Plan Title
-                            Text(
-                              displayPlanHeader,
-                              style: GoogleFonts.nunito(
-                                fontSize: 13,
-                                fontWeight: FontWeight.bold,
-                                color: kPrimaryTeal,
-                                letterSpacing: 0.3,
+                        // "Get Detour" Button
+                        Expanded(
+                          child: Container(
+                            height: 52,
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(12),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: kPrimaryTeal.withValues(alpha: 0.15),
+                                  blurRadius: 8,
+                                  offset: const Offset(0, 4),
+                                ),
+                              ],
+                            ),
+                            child: ElevatedButton.icon(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: kPrimaryTeal,
+                                foregroundColor: Colors.white,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                elevation: 0,
+                              ),
+                              onPressed: () {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text(
+                                      isUrdu
+                                          ? 'متبادل راستے کا حساب لگایا جا رہا ہے...'
+                                          : 'Calculating detour routes...',
+                                    ),
+                                    backgroundColor: kPrimaryTeal,
+                                  ),
+                                );
+                              },
+                              icon: const Icon(
+                                Icons.directions,
+                                color: Colors.white,
+                                size: 20,
+                              ),
+                              label: Text(
+                                getDetourText,
+                                style: GoogleFonts.nunito(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 16,
+                                ),
                               ),
                             ),
-                            const SizedBox(height: 12),
-
-                            // Plan Step 1
-                            Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Container(
-                                  width: 22,
-                                  height: 22,
-                                  decoration: const BoxDecoration(
-                                    shape: BoxShape.circle,
-                                    color: kPrimaryTeal,
-                                  ),
-                                  child: const Center(
-                                    child: Text(
-                                      '1',
-                                      style: TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 11,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        isUrdu
-                                            ? _activeIncident.steps[0].urduTitle
-                                            : _activeIncident.steps[0].title,
-                                        style: GoogleFonts.nunito(
-                                          fontWeight: FontWeight.bold,
-                                          fontSize: 13.5,
-                                          color: kTextDark,
-                                        ),
-                                      ),
-                                      const SizedBox(height: 2),
-                                      Text(
-                                        isUrdu
-                                            ? _activeIncident.steps[0].urduSubtitle
-                                            : _activeIncident.steps[0].subtitle,
-                                        style: GoogleFonts.nunito(
-                                          fontSize: 11.5,
-                                          color: kTextLight,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 16),
-
-                            // Plan Step 2
-                            Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Container(
-                                  width: 22,
-                                  height: 22,
-                                  decoration: BoxDecoration(
-                                    shape: BoxShape.circle,
-                                    color: Colors.grey.shade300,
-                                  ),
-                                  child: Center(
-                                    child: Text(
-                                      '2',
-                                      style: TextStyle(
-                                        color: Colors.grey.shade700,
-                                        fontSize: 11,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        isUrdu
-                                            ? _activeIncident.steps[1].urduTitle
-                                            : _activeIncident.steps[1].title,
-                                        style: GoogleFonts.nunito(
-                                          fontWeight: FontWeight.bold,
-                                          fontSize: 13.5,
-                                          color: kTextDark,
-                                        ),
-                                      ),
-                                      const SizedBox(height: 2),
-                                      Text(
-                                        isUrdu
-                                            ? _activeIncident.steps[1].urduSubtitle
-                                            : _activeIncident.steps[1].subtitle,
-                                        style: GoogleFonts.nunito(
-                                          fontSize: 11.5,
-                                          color: kTextLight,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ],
+                          ),
                         ),
-
-                        // Sleek Circular Watermark Pattern on the right matching UI
-                        Positioned(
-                          right: -10,
-                          top: -10,
-                          child: Opacity(
-                            opacity: 0.04,
-                            child: Container(
-                              width: 80,
-                              height: 80,
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                border: Border.all(
-                                  color: kPrimaryTeal,
-                                  width: 6,
-                                ),
+                        const SizedBox(width: 12),
+                        // Share Button
+                        Container(
+                          height: 52,
+                          width: 52,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF1F5F9),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: const Color(0xFFE2E8F0)),
+                          ),
+                          child: Material(
+                            color: Colors.transparent,
+                            child: InkWell(
+                              borderRadius: BorderRadius.circular(12),
+                              onTap: () {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text(
+                                      isUrdu
+                                          ? 'الرٹ رپورٹ شیئر کی جا رہی ہے...'
+                                          : 'Sharing incident alert report...',
+                                    ),
+                                    backgroundColor: kPrimaryTeal,
+                                  ),
+                                );
+                              },
+                              child: const Icon(
+                                Icons.share_outlined,
+                                color: kTextDark,
+                                size: 20,
                               ),
                             ),
                           ),
                         ),
                       ],
                     ),
-                  ),
-                  const SizedBox(height: 20),
-
-                  // Bottom Action Buttons Row
-                  Row(
-                    children: [
-                      // "Get Detour" Button
-                      Expanded(
-                        child: Container(
-                          height: 52,
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(12),
-                            boxShadow: [
-                              BoxShadow(
-                                color: kPrimaryTeal.withValues(alpha: 0.15),
-                                blurRadius: 8,
-                                offset: const Offset(0, 4),
-                              ),
-                            ],
-                          ),
-                          child: ElevatedButton.icon(
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: kPrimaryTeal,
-                              foregroundColor: Colors.white,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              elevation: 0,
-                            ),
-                            onPressed: () {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text(
-                                    isUrdu
-                                        ? 'متبادل راستے کا حساب لگایا جا رہا ہے...'
-                                        : 'Calculating detour routes...',
-                                  ),
-                                  backgroundColor: kPrimaryTeal,
-                                ),
-                              );
-                            },
-                            icon: const Icon(
-                              Icons.directions,
-                              color: Colors.white,
-                              size: 20,
-                            ),
-                            label: Text(
-                              getDetourText,
-                              style: GoogleFonts.nunito(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 16,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      // Share Button
-                      Container(
-                        height: 52,
-                        width: 52,
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFF1F5F9),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: const Color(0xFFE2E8F0)),
-                        ),
-                        child: Material(
-                          color: Colors.transparent,
-                          child: InkWell(
-                            borderRadius: BorderRadius.circular(12),
-                            onTap: () {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text(
-                                    isUrdu
-                                        ? 'الرٹ رپورٹ شیئر کی جا رہی ہے...'
-                                        : 'Sharing incident alert report...',
-                                  ),
-                                  backgroundColor: kPrimaryTeal,
-                                ),
-                              );
-                            },
-                            child: const Icon(
-                              Icons.share_outlined,
-                              color: kTextDark,
-                              size: 20,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
-          ),
-        ],
-      ),
-    );
+          ],
+        ),
+      );
   }
 }
