@@ -19,11 +19,17 @@ DB_URI = os.getenv("DATABASE_URL")
 # In-Memory Backup Storage (Self-healing fallback if database is offline or paused)
 _IN_MEMORY_INCIDENTS = {}
 _IN_MEMORY_RESOURCES = {
-    "RES-001": {"resource_id": "RES-001", "name": "Faizabad Ambulance Unit", "resource_type": "ambulances", "quantity_available": 3, "status": "standby"},
-    "RES-002": {"resource_id": "RES-002", "name": "Islamabad Dewatering Team", "resource_type": "dewatering_pumps", "quantity_available": 2, "status": "standby"},
-    "RES-003": {"resource_id": "RES-003", "name": "Lahore Fire Squad", "resource_type": "fire_trucks", "quantity_available": 2, "status": "standby"},
-    "RES-004": {"resource_id": "RES-004", "name": "Karachi Rescue Crew", "resource_type": "utility_crews", "quantity_available": 4, "status": "standby"},
-    "RES-005": {"resource_id": "RES-005", "name": "Rawalpindi Traffic Unit", "resource_type": "traffic_units", "quantity_available": 5, "status": "standby"},
+    "RES-RWP-01": {"resource_id": "RES-RWP-01", "name": "Faizabad Ambulance Unit", "resource_type": "ambulance", "quantity_available": 5, "status": "available", "location": {"lat": 33.6375, "lng": 73.0784}},
+    "RES-RWP-02": {"resource_id": "RES-RWP-02", "name": "Saddar WASA Flood Response", "resource_type": "dewatering_pump", "quantity_available": 4, "status": "available", "location": {"lat": 33.5984, "lng": 73.0544}},
+    "RES-RWP-03": {"resource_id": "RES-RWP-03", "name": "Holy Family Medical Rescue", "resource_type": "rescue_team", "quantity_available": 3, "status": "available", "location": {"lat": 33.6341, "lng": 73.0715}},
+    "RES-RWP-04": {"resource_id": "RES-RWP-04", "name": "Commercial Market Fire Dept", "resource_type": "fire_truck", "quantity_available": 2, "status": "available", "location": {"lat": 33.6338, "lng": 73.0747}},
+    "RES-RWP-05": {"resource_id": "RES-RWP-05", "name": "Peshawar Road Quick Response", "resource_type": "rescue_team", "quantity_available": 2, "status": "available", "location": {"lat": 33.6063, "lng": 73.0233}},
+    "RES-ISB-01": {"resource_id": "RES-ISB-01", "name": "G-11 Fire & Rescue Unit", "resource_type": "fire_truck", "quantity_available": 4, "status": "available", "location": {"lat": 33.6766, "lng": 73.0132}},
+    "RES-ISB-02": {"resource_id": "RES-ISB-02", "name": "F-6 Emergency Ambulances", "resource_type": "ambulance", "quantity_available": 3, "status": "available", "location": {"lat": 33.7299, "lng": 73.0746}},
+    "RES-ISB-03": {"resource_id": "RES-ISB-03", "name": "E-11 WASA Dewatering Point", "resource_type": "dewatering_pump", "quantity_available": 3, "status": "available", "location": {"lat": 33.7001, "lng": 72.9812}},
+    "RES-ISB-04": {"resource_id": "RES-ISB-04", "name": "Blue Area Central Rescue", "resource_type": "rescue_team", "quantity_available": 5, "status": "available", "location": {"lat": 33.7182, "lng": 73.0605}},
+    "RES-ISB-05": {"resource_id": "RES-ISB-05", "name": "I-8 Traffic Management", "resource_type": "police_unit", "quantity_available": 2, "status": "available", "location": {"lat": 33.6698, "lng": 73.0741}},
+    "RES-ISB-06": {"resource_id": "RES-ISB-06", "name": "PIMS Hospital Ambulances", "resource_type": "ambulance", "quantity_available": 8, "status": "available", "location": {"lat": 33.7051, "lng": 73.0504}},
 }
 
 
@@ -272,19 +278,27 @@ class KhabarFirestore:
         try:
             conn = get_db_connection()
             cur = conn.cursor()
-            cur.execute("SELECT * FROM resources;")
+            cur.execute("SELECT resource_id, name, type, quantity, status, location FROM resources;")
             rows = cur.fetchall()
             cur.close()
             conn.close()
             
             for row in rows:
+                loc_data = row[5]
+                if isinstance(loc_data, str):
+                    try:
+                        loc_data = json.loads(loc_data)
+                    except:
+                        loc_data = None
+                        
                 resources.append({
                     "id": row[0],
                     "resource_id": row[0],
                     "name": row[1],
                     "resource_type": row[2],
                     "quantity_available": row[3],
-                    "status": row[4]
+                    "status": row[4],
+                    "location": loc_data
                 })
             return resources
         except Exception as e:
