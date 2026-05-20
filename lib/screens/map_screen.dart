@@ -460,27 +460,57 @@ class _MapScreenState extends State<MapScreen> {
       );
     }
 
+    // Always ensure the currently active selected incident has a marker on the map
+    bool activeAdded = false;
+    for (var m in markers) {
+      if (m.markerId.value.contains(_activeIncident.id)) {
+        activeAdded = true;
+        break;
+      }
+    }
+    if (!activeAdded) {
+      final isCrisis = _activeIncident.severity.contains('P1') || _activeIncident.id == 'KH-201';
+      markers.add(
+        Marker(
+          markerId: MarkerId('active_${_activeIncident.id}'),
+          position: _activeIncident.position,
+          icon: BitmapDescriptor.defaultMarkerWithHue(
+            isCrisis ? BitmapDescriptor.hueRed : BitmapDescriptor.hueOrange,
+          ),
+          infoWindow: InfoWindow(
+            title: _activeIncident.title,
+            snippet: '${_activeIncident.severity} (${_activeIncident.location})',
+          ),
+        ),
+      );
+    }
+
     return markers;
   }
 
   Set<Polyline> _createPolylines() {
-    if (_realIncidents.isEmpty) return {};
+    // Enable route simulation if the active incident is a P1 crisis or the default sinkhole
+    final isCrisis = _activeIncident.severity.toLowerCase().contains('p1') || 
+                     _activeIncident.severity.toLowerCase().contains('crisis') ||
+                     _activeIncident.id == 'KH-201';
+    
+    if (!isCrisis) return {};
     
     // Dynamic mock route generation relative to the active incident's position
     final basePos = _activeIncident.position;
     
-    // Closed road (Red Line) - represents the blocked arterial route
+    // Closed road (Red Line) - represents the blocked arterial route (narrowed down slightly to fit the street blocks nicely)
     final closedRoadPoints = [
-      LatLng(basePos.latitude - 0.005, basePos.longitude - 0.005),
+      LatLng(basePos.latitude - 0.002, basePos.longitude - 0.002),
       basePos, // Center of incident
-      LatLng(basePos.latitude + 0.005, basePos.longitude + 0.005),
+      LatLng(basePos.latitude + 0.002, basePos.longitude + 0.002),
     ];
     
     // Detour route (Green Dotted Line) - represents the alternate corridor
     final detourPoints = [
-      LatLng(basePos.latitude - 0.005, basePos.longitude - 0.005),
-      LatLng(basePos.latitude - 0.002, basePos.longitude + 0.008), // Detour curve
-      LatLng(basePos.latitude + 0.005, basePos.longitude + 0.005),
+      LatLng(basePos.latitude - 0.002, basePos.longitude - 0.002),
+      LatLng(basePos.latitude - 0.001, basePos.longitude + 0.003), // Detour curve
+      LatLng(basePos.latitude + 0.002, basePos.longitude + 0.002),
     ];
 
     return {
