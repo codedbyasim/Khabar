@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 import 'package:khabar/theme/app_colors.dart';
 import 'package:khabar/theme/language_provider.dart';
 import 'package:khabar/api_config.dart';
+import 'package:geolocator/geolocator.dart';
 
 class MapIncident {
   final String id;
@@ -77,6 +78,7 @@ class _MapScreenState extends State<MapScreen> {
 
   List<MapIncident> _realIncidents = [];
   List<dynamic> _realResources = [];
+  Position? _currentPosition;
 
   @override
   void initState() {
@@ -85,6 +87,32 @@ class _MapScreenState extends State<MapScreen> {
     _activeIncident = _getDefaultIncident();
     _fetchRealIncidents();
     _fetchRealResources();
+    _determinePosition();
+  }
+
+  Future<void> _determinePosition() async {
+    bool serviceEnabled;
+    LocationPermission permission;
+
+    serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    if (!serviceEnabled) return; // Service not enabled
+
+    permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+      if (permission == LocationPermission.denied) return;
+    }
+    
+    if (permission == LocationPermission.deniedForever) return;
+
+    final position = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high);
+    if (mounted) {
+      setState(() {
+        _currentPosition = position;
+      });
+      // Optionally center map on user's live location
+      // mapController.animateCamera(CameraUpdate.newLatLng(LatLng(position.latitude, position.longitude)));
+    }
   }
 
   Future<void> _fetchRealResources() async {
@@ -351,17 +379,19 @@ class _MapScreenState extends State<MapScreen> {
     final markers = <Marker>{};
 
     // 1. Add User's Real Location Marker (Blue Dot)
-    markers.add(
-      Marker(
-        markerId: const MarkerId('user_real_location'),
-        position: const LatLng(33.7015, 73.0400),
-        infoWindow: const InfoWindow(
-          title: "My Location",
-          snippet: "GPS Active",
+    if (_currentPosition != null) {
+      markers.add(
+        Marker(
+          markerId: const MarkerId('user_real_location'),
+          position: LatLng(_currentPosition!.latitude, _currentPosition!.longitude),
+          infoWindow: const InfoWindow(
+            title: "My Location",
+            snippet: "Live GPS Active",
+          ),
+          icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueBlue),
         ),
-        icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueBlue),
-      ),
-    );
+      );
+    }
 
     // 2. Add dynamic Backend Resources (Ambulances, Fire Trucks, Rescue Teams)
     for (var r in _realResources) {
@@ -742,7 +772,8 @@ class _MapScreenState extends State<MapScreen> {
             mapType: _currentMapType,
             markers: _createMarkers(),
             polylines: _createPolylines(),
-            myLocationButtonEnabled: false,
+            myLocationEnabled: true,
+            myLocationButtonEnabled: true,
             zoomControlsEnabled: false,
           ),
 
