@@ -9,17 +9,17 @@ KHABAR (Urdu for *News* or *Awareness*) is a state-of-the-art Agentic AI Crisis 
 
 ```mermaid
 graph TD
-    subgraph Tier 1: Input (Frontend)
+    subgraph Tier1 [Tier 1: Input Frontend]
         A[Flutter Mobile App] -->|Report Text/Photo/Voice| B[FastAPI Gateway]
         C[Google News RSS Feed] -->|Pakistan Alerts| A
     end
     
-    subgraph Tier 2: API Gateway
+    subgraph Tier2 [Tier 2: API Gateway]
         B -->|Orchestrate Pipeline| D[Google Antigravity Core]
         B -->|Background Polling| E[Weather & Traffic Ingestor]
     end
 
-    subgraph Tier 3: AI Core (Antigravity Pipeline)
+    subgraph Tier3 [Tier 3: AI Core Antigravity Pipeline]
         D -->|Stage 1| F[Detection Agent]
         F -->|Stage 2| G[Analysis Agent]
         G -->|Stage 3| H[Planning Agent]
@@ -28,7 +28,7 @@ graph TD
         H -->|RAG Query| J[(Vector Database - NDMA SOPs)]
     end
 
-    subgraph Tier 4: Execution & Data
+    subgraph Tier4 [Tier 4: Execution & Data]
         I -->|Tools| K[Google Maps API]
         I -->|Tools| L[Action Simulations]
         I -->|Logs & Tickets| M[(Supabase PostgreSQL - AWS)]
