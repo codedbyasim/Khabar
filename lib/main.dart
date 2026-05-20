@@ -73,6 +73,20 @@ class KhabarApp extends StatelessWidget {
         Locale('en', ''), // English
         Locale('ur', ''), // Urdu
       ],
+      builder: (context, child) {
+        // Global Responsive Logic:
+        // Automatically scales all text based on screen width relative to a 390px baseline (iPhone 14)
+        // Clamped between 0.85 and 1.3 to prevent extreme distortions on tiny or huge screens.
+        final mediaQuery = MediaQuery.of(context);
+        final double scaleFactor = (mediaQuery.size.width / 390.0).clamp(0.85, 1.3);
+
+        return MediaQuery(
+          data: mediaQuery.copyWith(
+            textScaler: TextScaler.linear(scaleFactor),
+          ),
+          child: child!,
+        );
+      },
       theme: ThemeData(
         useMaterial3: true,
         primaryColor: kPrimaryTeal,
