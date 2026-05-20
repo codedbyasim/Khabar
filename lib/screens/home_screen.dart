@@ -583,12 +583,13 @@ class _HomeScreenState extends State<HomeScreen>
 
   // ── Help with AI Chat Card ──
   Widget _buildHelpWithAiCard() {
-    String helpTitle = "Help with Antigravity AI";
+    String helpTitle = "Help with Khabar Chatbot";
     String helpSubtitle = "Chat real-time for safety guidelines & live updates.";
     if (_selectedLanguage == 'اردو') {
-      helpTitle = "اینٹی گریوٹی اے آئی کی مدد";
+      helpTitle = "خبر چیٹ بوٹ سے مدد";
       helpSubtitle = "حفاظتی رہنما خطوط اور براہ راست اپ ڈیٹس کے لیے چیٹ کریں۔";
     } else if (_selectedLanguage == 'Roman Urdu') {
+      helpTitle = "Khabar Chatbot ki madad";
       helpSubtitle = "Safety guidelines aur live updates ke liye chat karein.";
     }
 

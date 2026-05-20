@@ -651,13 +651,44 @@ async def chat(request: ChatRequest):
                 nearest_resource = "Faizabad Rescue Hub"
                 distance_str = "6.2 km"
 
-        system_prompt = f"""You are Antigravity AI, the dedicated chat assistant for KHABAR.
+        # Fetch active incidents from PostgreSQL database via Firestore interface to inform chatbot of live news/incidents
+        firestore_incidents = firestore.get_all_incidents()
+        incidents_context = []
+        for inc in firestore_incidents:
+            if not inc:
+                continue
+            inc_id = inc.get("incident_id")
+            inc_type = inc.get("incident_type") or "Emergency"
+            status = inc.get("status") or "ACTIVE"
+            priority = inc.get("priority") or "P3"
+            
+            # Location details
+            loc = inc.get("location") or {}
+            loc_str = "Islamabad/Rawalpindi"
+            if isinstance(loc, dict):
+                loc_str = loc.get("address") or loc.get("location_name") or f"coordinates: {inc.get('lat')}, {inc.get('lng')}"
+            else:
+                loc_str = str(loc)
+            
+            incidents_context.append(
+                f"- ID: {inc_id} | Type: {inc_type} | Location: {loc_str} | Priority/Severity: {priority} | Status: {status}"
+            )
+        
+        if incidents_context:
+            incidents_list_str = "\n".join(incidents_context)
+        else:
+            incidents_list_str = "No active incidents currently reported in the database."
+
+        system_prompt = f"""You are Khabar Chatbot, the dedicated chat assistant for KHABAR.
 Your goal is to guide citizens in Islamabad and Rawalpindi during weather alerts, floods, fires, or regular safety enquiries.
 
 CURRENT USER LOCATION CONTEXT:
 The user has reported their current location/sector as: {user_loc}
 The nearest emergency response point/station to them is: '{nearest_resource}'
 Calculated response/travel time for help to reach this sector: '{estimated_time}' (precise driving distance: {distance_str})
+
+SYSTEM CONTEXT — ACTIVE REPORTED INCIDENTS IN DATABASE:
+{incidents_list_str}
 
 LANGUAGE RULE:
 {language_rule}
@@ -669,6 +700,7 @@ RULES:
 4. Keep guidelines actionable (Do's and Don'ts).
 5. When they ask about help arrival, WASA, or Rescue teams, utilize the calculated travel time ({estimated_time}) and distance ({distance_str}) from '{nearest_resource}' and inform them.
 6. Ensure response is cleanly formatted using bullet points where appropriate and avoid raw markdown symbols that look ugly.
+7. When users ask about what incidents occurred or where they occurred (e.g., 'Kahan kahan incident huva hai?', 'Any active news or emergencies?'), look at the 'SYSTEM CONTEXT — ACTIVE REPORTED INCIDENTS IN DATABASE' above and describe exactly where they happened, what type they are, and their current priority/status. Be specific and helpful.
 """
         messages = [{"role": "system", "content": system_prompt}]
         for h in request.history:

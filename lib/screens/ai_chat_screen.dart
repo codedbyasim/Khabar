@@ -58,7 +58,7 @@ class _AiChatScreenState extends State<AiChatScreen> {
     super.initState();
     // Welcome message
     _messages.add(ChatMessage(
-      text: "Assalam-o-Alaikum! Main Antigravity AI hoon, aapka KHABAR assistant. Main aapko Islamabad aur Rawalpindi mein crisis guidance, weather updates aur emergency guidelines faraham kar sakta hoon. Main aapki kya madad karoon?",
+      text: "Assalam-o-Alaikum! Main Khabar Chatbot hoon, aapka dynamic crisis assistant. Main aapko Islamabad aur Rawalpindi mein live incidents, weather updates aur emergency guidelines faraham kar sakta hoon. Main aapki kya madad karoon?",
       isUser: false,
       timestamp: DateTime.now(),
     ));
@@ -168,7 +168,7 @@ class _AiChatScreenState extends State<AiChatScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  "Antigravity AI Chat",
+                  "Khabar Chatbot",
                   style: GoogleFonts.nunito(
                     fontWeight: FontWeight.bold,
                     fontSize: 16,
@@ -222,7 +222,7 @@ class _AiChatScreenState extends State<AiChatScreen> {
                     ),
                     const SizedBox(width: 8),
                     Text(
-                      "Antigravity AI is thinking...",
+                      "Khabar Chatbot is thinking...",
                       style: GoogleFonts.nunito(
                         fontSize: 12,
                         color: kTextLight,
