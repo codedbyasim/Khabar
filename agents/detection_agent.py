@@ -1,8 +1,28 @@
 import json
 import logging
+import httpx
 from enum import Enum
 from typing import List, Optional, Any, Dict
 from pydantic import BaseModel, Field, ValidationError
+
+def get_live_weather(lat: float, lng: float) -> dict:
+    """Fetches real-time weather from Open-Meteo for validation/cross-referencing."""
+    try:
+        url = f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lng}&current=temperature_2m,rain,showers,snowfall,wind_speed_10m&timezone=auto"
+        with httpx.Client(timeout=5, verify=False) as client:
+            response = client.get(url)
+            if response.status_code == 200:
+                current = response.json().get("current", {})
+                return {
+                    "temperature_c": current.get("temperature_2m"),
+                    "rain_mm": current.get("rain"),
+                    "showers_mm": current.get("showers"),
+                    "snowfall_cm": current.get("snowfall"),
+                    "wind_speed_kmh": current.get("wind_speed_10m")
+                }
+    except Exception as e:
+        logging.warning(f"[Weather Validation] Live weather fetch failed: {e}")
+    return {}
 
 # ==========================================
 # 3. INPUT SCHEMA
@@ -65,12 +85,14 @@ class DetectionOutput(BaseModel):
     normalized_input: str = Field(..., description="Cleaned, normalized English translation/version of the input")
     reasoning_trace: str = Field(..., description="Step-by-step reasoning explaining the classification and priority")
     urgency_flags: List[str] = Field(default=[], description="Specific keywords or phrases indicating high urgency")
+    is_verified: bool = Field(default=True, description="Whether the incident has been verified against external API context (e.g. weather data). Mark false if suspicious or fake.")
+    verification_reason: str = Field(default="Standard report validation", description="Reasoning explaining the validation assessment based on live sensors.")
 
 # ==========================================
 # 2. SYSTEM PROMPT
 # ==========================================
 SYSTEM_PROMPT = """You are the Detection Agent for KHABAR (Crisis Intelligence & Response Orchestrator).
-Your role is to analyze raw, noisy, and informal crisis signals (in English, Urdu, Punjabi, or Roman Urdu) and extract structured incident data.
+Your role is to analyze raw, noisy, and informal crisis signals (in English, Urdu, Punjabi, or Roman Urdu), validate their authenticity, and extract structured incident data.
 
 INSTRUCTIONS:
 1. Normalize Input: Translate Urdu, Punjabi, or Roman Urdu into clear English. Correct typos and informal grammar.
@@ -83,13 +105,20 @@ INSTRUCTIONS:
    - Priority P4: Low immediate risk (e.g., road blockage, minor fire).
    - Priority P5: Non-emergency or informational.
 5. Identify Urgency Flags: Extract exact phrases like "help fast", "log phans gaye hain", "bhot aag", "dying".
-6. Generate Reasoning Trace: Provide a concise logical path justifying your classification and priority mapping.
-7. Return strictly valid JSON conforming to the Output Schema.
+6. Validate Authenticity (Real vs Fake):
+   - Compare the reported incident with the provided "LIVE ENVIRONMENTAL SENSOR CONTEXT".
+   - If the user reports weather-related issues (e.g., urban flooding, storm, heavy rainfall, or extreme heatwave/cold):
+     * Check if the live weather matches or correlates. E.g., if they report "severe urban flooding/torrential rain" but live rain/showers is 0.0mm and weather is clear, mark `is_verified` as false, and set `verification_reason` to a detailed explanation that the report is highly suspicious or likely fake.
+     * E.g., if they report "extreme heatwave" but the temperature is low (e.g., under 30°C), mark `is_verified` as false.
+     * If the weather data is empty, unavailable, or matches/correlates, or if it is a non-weather event (like a road accident, fire, building collapse, or medical emergency) which cannot be checked by weather sensors, mark `is_verified` as true.
+7. Generate Reasoning Trace: Provide a concise logical path justifying your classification, priority mapping, and verification check.
+8. Return strictly valid JSON conforming to the Output Schema.
 
 RULES:
 - If life is in immediate danger, Priority MUST be P1 and Severity MUST be CRITICAL.
 - P1 incidents will trigger the full response pipeline automatically. Be highly sensitive to life-threat indicators.
 - Handle noisy and mixed-code text robustly.
+- Be objective and thorough in the verification step to prevent fake news or false alarms from wasting rescue resources.
 """
 
 # ==========================================
@@ -126,7 +155,21 @@ class DetectionAgent:
         self.system_prompt = SYSTEM_PROMPT
 
     async def process_signal(self, signal: RawCrisisSignal) -> DetectionOutput:
-        prompt = f"Raw Signal:\n{signal.model_dump_json()}"
+        lat = 33.6844
+        lng = 73.0479
+        if signal.metadata:
+            lat = float(signal.metadata.get("lat") or 33.6844)
+            lng = float(signal.metadata.get("lng") or 73.0479)
+            
+        weather_info = get_live_weather(lat, lng)
+        
+        sensor_context = f"""
+LIVE ENVIRONMENTAL SENSOR CONTEXT:
+- Latitude: {lat}
+- Longitude: {lng}
+- Current Weather Data: {json.dumps(weather_info)}
+"""
+        prompt = f"{sensor_context}\nRaw Signal:\n{signal.model_dump_json()}"
         
         try:
             raw_response = await self.llm_client.generate_json(

@@ -149,12 +149,15 @@ class KhabarOrchestrator:
         }
         # Add detection info if available
         if memory.detection_output:
+            loc_dict = memory.detection_output.detected_location.dict()
+            loc_dict["is_verified"] = getattr(memory.detection_output, "is_verified", True)
+            loc_dict["verification_reason"] = getattr(memory.detection_output, "verification_reason", "Verified")
             payload.update({
                 "incident_type": memory.detection_output.incident_type.value,
                 "severity": memory.detection_output.severity.value,
                 "priority": memory.detection_output.priority.value,
                 "confidence": memory.detection_output.confidence_score,
-                "location": memory.detection_output.detected_location.dict(),
+                "location": loc_dict,
             })
         # Add execution before/after if available
         if memory.execution_output:

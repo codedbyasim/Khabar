@@ -323,12 +323,15 @@ async def get_incidents():
             "trace_count": len(memory.traces),
         }
         if memory.detection_output:
+            loc_dict = memory.detection_output.detected_location.model_dump()
+            loc_dict["is_verified"] = getattr(memory.detection_output, "is_verified", True)
+            loc_dict["verification_reason"] = getattr(memory.detection_output, "verification_reason", "Verified")
             entry.update({
                 "incident_type": memory.detection_output.incident_type.value,
                 "severity": memory.detection_output.severity.value,
                 "priority": memory.detection_output.priority.value,
                 "confidence": memory.detection_output.confidence_score,
-                "location": memory.detection_output.detected_location.model_dump(),
+                "location": loc_dict,
             })
         if memory.execution_output:
             entry["before_state"] = memory.execution_output.before_state.model_dump()
