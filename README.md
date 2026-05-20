@@ -44,25 +44,25 @@ Our platform orchestrates four specialized agents in a linear workflow, passing 
 
 ### **Stage 1: Detection Agent**
 *   **Role:** Analyzes noisy, informal text (in English, Urdu, Roman Urdu, or Punjabi), transcribed voice audio, or disaster photos to classify the crisis type, GPS coordinates, and assigns confidence score.
-*   **Model:** `gemini-3.1-pro-preview-customtools` (Zero-shot text parser) and `gemini-3-pro-image-preview` (Vision-based damage estimator).
+*   **Model:** `gemini-2.5-flash` (Zero-shot text parser) and `gemini-2.5-flash` (Vision-based damage estimator).
 
 ### **Stage 2: Analysis Agent**
 *   **Role:** Evaluates the severity and determines the impact of the crisis. It calculates stranded vehicles, estimates affected populace, looks up nearby critical infrastructure (via Google Maps), and produces bilingual impact summaries.
-*   **Model:** `gemini-3.1-pro-preview-customtools`
+*   **Model:** `gemini-2.5-flash`
 
 ### **Stage 3: Planning Agent**
 *   **Role:** Formulates a highly prioritized response action plan. It queries the Vector Database for the official **NDMA (National Disaster Management Authority) Pakistan protocols** and checks local resource inventories before proposing dispatches.
-*   **Model:** `gemini-3.1-pro-preview-customtools`
+*   **Model:** `gemini-2.5-flash`
 
 ### **Stage 4: Execution Agent**
 *   **Role:** Directly invokes the corresponding tool integrations to simulate the actions in real-time. It records the complete "Before vs After" system state differences.
-*   **Model:** `gemini-3.1-pro-preview-customtools`
+*   **Model:** `gemini-2.5-flash`
 
 ---
 
 ## 📸 3. Multi-Source Input Pipelines (Voice & Photo)
-*   **Voice Reporting:** Citizens can submit raw audio via the mobile app. The audio is sent directly to the `gemini-3.1-flash` native audio API, which accurately transcribes regional languages like Urdu and Punjabi into actionable text.
-*   **Photo Verification:** Citizens can snap photos of an emerging crisis. The image is analyzed by `gemini-3.1-pro-vision` to verify the severity (e.g., measuring water levels, structural damage) before being ingested into the pipeline.
+*   **Voice Reporting:** Citizens can submit raw audio via the mobile app. The audio is sent directly to the `gemini-2.5-flash` native audio API, which accurately transcribes regional languages like Urdu and Punjabi into actionable text.
+*   **Photo Verification:** Citizens can snap photos of an emerging crisis. The image is analyzed by `gemini-2.5-flash` to verify the severity (e.g., measuring water levels, structural damage) before being ingested into the pipeline.
 *   **Text Processing:** Fully capable of understanding "Roman Urdu" (e.g., *G-10 mein pani bhar gaya hai*) natively through Gemini.
 
 ---
