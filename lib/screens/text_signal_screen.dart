@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:khabar/theme/app_colors.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
@@ -21,6 +22,7 @@ class _TextSignalScreenState extends State<TextSignalScreen> {
   bool _isUrdu = false;
   late LatLng _markerPosition;
   bool _isSubmitting = false;
+  GoogleMapController? _mapController;
 
   @override
   void initState() {
@@ -33,12 +35,47 @@ class _TextSignalScreenState extends State<TextSignalScreen> {
       isRawalpindi ? 33.5651 : 33.6844,
       isRawalpindi ? 73.0169 : 73.0479,
     );
+
+    // Fetch user's current GPS location automatically on startup
+    _getCurrentLocation();
+  }
+
+  Future<void> _getCurrentLocation() async {
+    try {
+      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) return;
+
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+        if (permission == LocationPermission.denied) return;
+      }
+
+      if (permission == LocationPermission.deniedForever) return;
+
+      final position = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(accuracy: LocationAccuracy.high),
+      );
+      
+      final latLng = LatLng(position.latitude, position.longitude);
+      if (mounted) {
+        setState(() {
+          _markerPosition = latLng;
+        });
+        _mapController?.animateCamera(
+          CameraUpdate.newLatLng(latLng),
+        );
+      }
+    } catch (e) {
+      debugPrint("Error fetching automatic GPS location: $e");
+    }
   }
 
   @override
   void dispose() {
     _textController.removeListener(_onTextChanged);
     _textController.dispose();
+    _mapController?.dispose();
     super.dispose();
   }
 
@@ -177,8 +214,13 @@ class _TextSignalScreenState extends State<TextSignalScreen> {
                 child: GoogleMap(
                   initialCameraPosition: CameraPosition(
                     target: _markerPosition,
-                    zoom: 14,
+                    zoom: 15,
                   ),
+                  onMapCreated: (controller) {
+                    _mapController = controller;
+                  },
+                  myLocationEnabled: true,
+                  myLocationButtonEnabled: true,
                   markers: {
                     Marker(
                       markerId: const MarkerId('incident_location'),

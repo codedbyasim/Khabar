@@ -6,6 +6,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
 import 'package:record/record.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:khabar/screens/incident_tracker_screen.dart';
 import 'package:khabar/theme/app_colors.dart';
 import 'package:khabar/api_config.dart';
@@ -27,6 +28,8 @@ class _VoiceReportScreenState extends State<VoiceReportScreen>
   String _transcriptionText = "Listening to your voice...\n";
   bool _isProcessing = false;
   bool _isRecording = true;
+  double _lat = 33.6844;
+  double _lng = 73.0479;
 
   @override
   void initState() {
@@ -38,6 +41,34 @@ class _VoiceReportScreenState extends State<VoiceReportScreen>
     )..repeat(reverse: true);
 
     _startRecording();
+    _fetchDeviceLocation();
+  }
+
+  Future<void> _fetchDeviceLocation() async {
+    try {
+      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) return;
+
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+        if (permission == LocationPermission.denied) return;
+      }
+
+      if (permission == LocationPermission.deniedForever) return;
+
+      final position = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(accuracy: LocationAccuracy.high),
+      );
+      if (mounted) {
+        setState(() {
+          _lat = position.latitude;
+          _lng = position.longitude;
+        });
+      }
+    } catch (e) {
+      debugPrint("Voice screen GPS error: $e");
+    }
   }
 
   Future<void> _startRecording() async {
@@ -81,6 +112,8 @@ class _VoiceReportScreenState extends State<VoiceReportScreen>
       if (path != null) {
         var request = http.MultipartRequest('POST', Uri.parse('${ApiConfig.baseUrl}/report/voice'));
         request.files.add(await http.MultipartFile.fromPath('audio', path));
+        request.fields['lat'] = _lat.toString();
+        request.fields['lng'] = _lng.toString();
 
         var streamedResponse = await request.send();
         var response = await http.Response.fromStream(streamedResponse);

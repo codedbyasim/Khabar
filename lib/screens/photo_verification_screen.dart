@@ -5,6 +5,7 @@ import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
+import 'package:geolocator/geolocator.dart';
 import 'package:khabar/theme/app_colors.dart';
 import 'package:khabar/theme/language_provider.dart';
 import 'package:khabar/screens/incident_tracker_screen.dart';
@@ -24,11 +25,41 @@ class _PhotoVerificationScreenState extends State<PhotoVerificationScreen> {
   bool _isCameraInitialized = false;
   bool _isSubmitting = false;
   Map<String, dynamic>? _visionResult;
+  double _lat = 33.6844;
+  double _lng = 73.0479;
 
   @override
   void initState() {
     super.initState();
     _initCamera();
+    _fetchDeviceLocation();
+  }
+
+  Future<void> _fetchDeviceLocation() async {
+    try {
+      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) return;
+
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+        if (permission == LocationPermission.denied) return;
+      }
+
+      if (permission == LocationPermission.deniedForever) return;
+
+      final position = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(accuracy: LocationAccuracy.high),
+      );
+      if (mounted) {
+        setState(() {
+          _lat = position.latitude;
+          _lng = position.longitude;
+        });
+      }
+    } catch (e) {
+      debugPrint("Photo screen GPS error: $e");
+    }
   }
 
   Future<void> _initCamera() async {
@@ -83,12 +114,8 @@ class _PhotoVerificationScreenState extends State<PhotoVerificationScreen> {
         filename: 'crisis_photo.jpg',
       ));
       final String region = LanguageProvider().region;
-      final bool isRawalpindi = region.toLowerCase().contains('rawalpindi');
-      final double lat = isRawalpindi ? 33.5651 : 33.6844;
-      final double lng = isRawalpindi ? 73.0169 : 73.0479;
-
-      request.fields['lat'] = lat.toString();
-      request.fields['lng'] = lng.toString();
+      request.fields['lat'] = _lat.toString();
+      request.fields['lng'] = _lng.toString();
       request.fields['description'] = 'Photo report from KHABAR app ($region)';
 
       final streamed = await request.send();
