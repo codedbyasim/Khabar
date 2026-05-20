@@ -13,7 +13,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from llm_client import LLMClient
-from detection_agent import DetectionAgent, RawCrisisSignal, InputSourceType
+from detection_agent import DetectionAgent, RawCrisisSignal, InputSourceType, IncidentType, PriorityLevel
 from analysis_agent import AnalysisAgent, ContextSignals, AnalysisInputPayload
 from planning_agent import PlanningAgent, PlanningInputPayload
 from execution_agent import ExecutionAgent, ExecutionInputPayload
@@ -195,6 +195,34 @@ class KhabarOrchestrator:
                     self._trigger_fallback(memory, "Detection Failed")
                     return
 
+        # Check if the report is verified/valid and if there is a real crisis/emergency
+        is_verified = getattr(memory.detection_output, "is_verified", True)
+        incident_type = memory.detection_output.incident_type if memory.detection_output else IncidentType.UNKNOWN
+        priority_val = memory.detection_output.priority if memory.detection_output else PriorityLevel.P5
+
+        if not is_verified or incident_type == IncidentType.UNKNOWN or priority_val == PriorityLevel.P5:
+            memory.system_state.status = "REJECTED"
+            reason = getattr(memory.detection_output, "verification_reason", "No valid incident detected.")
+            if incident_type == IncidentType.UNKNOWN:
+                reason = "Casual talk, greetings, test data, or non-crisis message detected."
+            elif priority_val == PriorityLevel.P5:
+                reason = "Informational report with no active emergency priority."
+                
+            self.log_trace(
+                memory, "VALIDATION_FAILED",
+                f"❌ Pipeline halted: {reason}"
+            )
+            # Make sure location details reflect the verification failure reason
+            if memory.detection_output:
+                loc_dict = memory.detection_output.detected_location.dict()
+                loc_dict["is_verified"] = False
+                loc_dict["verification_reason"] = reason
+                # Also save back to memory record
+                memory.detection_output.is_verified = False
+                memory.detection_output.verification_reason = reason
+            self.push_to_firestore(memory)
+            return
+
         # ── FR-11: P1 AUTO-TRIGGER ──
         # P1 incidents bypass human confirmation and immediately proceed.
         # P2-P5 also auto-proceed in this implementation (no manual gate in demo).
@@ -202,7 +230,7 @@ class KhabarOrchestrator:
         if priority == "P1":
             self.log_trace(
                 memory, "DETECTION",
-                "🚨 P1 CRITICAL detected — Auto-triggering full response pipeline immediately (FR-11)."
+                "🚨 P1 CRITICAL detected — Auto-triggering response pipeline immediately (FR-11)."
             )
         else:
             self.log_trace(
