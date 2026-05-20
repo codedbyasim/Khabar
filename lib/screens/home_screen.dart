@@ -8,7 +8,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:khabar/screens/incident_tracker_screen.dart';
 import 'package:khabar/api_config.dart';
-
+import 'package:khabar/utils/responsive.dart';
 import 'package:khabar/screens/ai_chat_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -165,17 +165,7 @@ class _HomeScreenState extends State<HomeScreen>
                   _buildTodayNewsSection(),
                   const SizedBox(height: 24),
 
-                  Text(
-                    'Track My Help Requests',
-                    style: GoogleFonts.nunito(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                      color: kTextDark,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  _buildMySignalsCard(),
-                  const SizedBox(height: 24),
+                  // Removed "Track My Help Requests" as per user request
                   _buildStatsRow(),
                   const SizedBox(height: 100),
                 ],
@@ -189,11 +179,24 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   Widget _buildEmergencyMarquee() {
+    String alertText = AppTranslations.t('emergency_marquee', _selectedLanguage);
+    if (_newsArticles.isNotEmpty) {
+      final article = _newsArticles.first;
+      final title = article['title'] ?? '';
+      if (title.isNotEmpty) {
+        if (_selectedLanguage == 'اردو') {
+          alertText = "تازہ ترین ہنگامی الرٹ: $title     ***     ";
+        } else {
+          alertText = "LATEST EMERGENCY ALERT: $title     ***     ";
+        }
+      }
+    }
+
     return Container(
       height: 40,
       color: kEmergencyRed,
       child: Marquee(
-        text: AppTranslations.t('emergency_marquee', _selectedLanguage),
+        text: alertText,
         style: const TextStyle(
           color: Colors.white,
           fontWeight: FontWeight.bold,
